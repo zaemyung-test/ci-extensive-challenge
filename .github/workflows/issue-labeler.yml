@@ -1,0 +1,51 @@
+name: Issue Labeler
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label new issues
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = (issue.title || '').toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+            const labelsToAdd = [];
+
+            // add 'bug' label when 'error' is present
+            if (title.includes('error') || body.includes('error')) {
+              labelsToAdd.push('bug');
+            }
+
+            // add 'feature' label when 'add' is present (matches 'add', 'adding', etc.)
+            if (title.includes('add') || body.includes('add')) {
+              labelsToAdd.push('feature');
+            }
+
+            if (labelsToAdd.length === 0) {
+              console.log('No matching keywords found; no labels to add.');
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Ensure labels exist, create them if they don't
+            for (const label of labelsToAdd) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: label });
+              } catch (error) {
+                // Create label if not found
+                const color = label === 'bug' ? 'd73a4a' : '0e8a16';
+                const description = label === 'bug' ? 'Bug reports' : 'Feature requests';
+                await github.rest.issues.createLabel({ owner, repo, name: label, color, description });
+              }
+            }
+
+            // Add labels to the issue
+            await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels: labelsToAdd });
